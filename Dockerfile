@@ -19,9 +19,11 @@ WORKDIR /app
 COPY --from=builder /build/target/api.jar api.jar
 
 COPY wait-for-it.sh wait-for-it.sh
+COPY wait-for-mysql.sh wait-for-mysql.sh
 
-RUN chmod +x wait-for-it.sh
+RUN sed -i 's/\r$//' wait-for-it.sh wait-for-mysql.sh \
+	&& chmod +x wait-for-it.sh wait-for-mysql.sh
 
 EXPOSE 8080
 
-ENTRYPOINT ["./wait-for-it.sh", "mysql:3306", "--", "java", "-jar", "/app/api.jar"]
+ENTRYPOINT ["./wait-for-mysql.sh", "java", "-jar", "/app/api.jar"]

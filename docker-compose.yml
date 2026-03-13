@@ -31,7 +31,7 @@ services:
       MYSQL_DB: task_db
       MYSQL_USER: root
       MYSQL_PASS: Sula@991215
-    entrypoint: ["./wait-for-it.sh", "mysql:3306", "--", "java", "-jar", "/app/api.jar"]
+    entrypoint: ["./wait-for-mysql.sh", "java", "-jar", "/app/api.jar"]
     restart: unless-stopped
 
 volumes:
