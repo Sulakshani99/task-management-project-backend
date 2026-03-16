@@ -5,7 +5,7 @@ variable "aws_region" {
 }
 
 variable "app_name" {
-  description = "Name of your application"
+  description = "Name of my application"
   type        = string
   default     = "task-management-app"
 }
@@ -34,6 +34,12 @@ variable "db_instance_class" {
   default     = "db.t3.micro"
 }
 
+variable "db_backup_retention_period" {
+  description = "RDS automated backup retention period in days"
+  type        = number
+  default     = 1
+}
+
 variable "app_port" {
   description = "Application port"
   type        = number
@@ -43,7 +49,7 @@ variable "app_port" {
 variable "app_count" {
   description = "Number of application instances"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "cpu" {
@@ -66,3 +72,24 @@ variable "tags" {
     ManagedBy = "Terraform"
   }
 }
+
+variable "ses_verified_email" {
+  description = "Verified email for SES (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "ses_username" {
+  description = "SES SMTP username"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "ses_password" {
+  description = "SES SMTP password"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+

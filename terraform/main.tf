@@ -191,6 +191,7 @@ resource "aws_security_group" "rds" {
 
 # ─── RDS ──────────────────────────────────────────────────────────────────────
 
+//DB Subnet Group
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
@@ -200,6 +201,7 @@ resource "aws_db_subnet_group" "main" {
   })
 }
 
+//RDS Instance
 resource "aws_db_instance" "main" {
   identifier = "${local.name_prefix}-mysql"
 
@@ -219,8 +221,8 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  backup_retention_period = 7
-  backup_window           = "03:00-04:00"
+  backup_retention_period = var.db_backup_retention_period
+  backup_window           = var.db_backup_retention_period > 0 ? "03:00-04:00" : null
   maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
@@ -278,65 +280,6 @@ resource "aws_lb_listener" "web" {
   }
 }
 
-# ─── ECR ──────────────────────────────────────────────────────────────────────
-
-resource "aws_ecr_repository" "app" {
-  name                 = "${local.name_prefix}-repo"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = local.common_tags
-}
-
-# ─── CloudWatch ───────────────────────────────────────────────────────────────
-
-resource "aws_cloudwatch_log_group" "app" {
-  name              = "/ecs/${local.name_prefix}"
-  retention_in_days = 30
-
-  tags = local.common_tags
-}
-
-# ─── IAM ──────────────────────────────────────────────────────────────────────
-
-resource "aws_iam_role" "ecs_task_execution_role" {
-  name = "${local.name_prefix}-ecs-task-execution-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "ecs-tasks.amazonaws.com" }
-    }]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-resource "aws_iam_role" "ecs_task_role" {
-  name = "${local.name_prefix}-ecs-task-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "ecs-tasks.amazonaws.com" }
-    }]
-  })
-
-  tags = local.common_tags
-}
-
 # ─── ECS Cluster ──────────────────────────────────────────────────────────────
 
 resource "aws_ecs_cluster" "main" {
@@ -371,12 +314,42 @@ resource "aws_ecs_task_definition" "app" {
     }]
 
     environment = [
-      { name = "SPRING_PROFILES_ACTIVE", value = "docker" },
-      { name = "MYSQL_HOST",             value = aws_db_instance.main.address },
-      { name = "MYSQL_PORT",             value = "3306" },
-      { name = "MYSQL_DB",               value = "task_db" },
-      { name = "MYSQL_USER",             value = var.db_username },
-      { name = "MYSQL_PASS",             value = var.db_password }
+      {
+        name  = "SPRING_PROFILES_ACTIVE"
+        value = "prod"
+      },
+      {
+        name  = "MYSQL_HOST"
+        value = aws_db_instance.main.address
+      },
+      {
+        name  = "MYSQL_PORT"
+        value = "3306"
+      },
+      {
+        name  = "MYSQL_DB"
+        value = "game_db"
+      },
+      {
+        name  = "MYSQL_USER"
+        value = var.db_username
+      },
+      {
+        name  = "MYSQL_PASS"
+        value = var.db_password
+      },
+      {
+        name  = "SES_USERNAME"
+        value = var.ses_username
+      },
+      {
+        name  = "SES_PASSWORD"
+        value = var.ses_password
+      },
+      {
+        name  = "SES_FROM_EMAIL"
+        value = var.ses_verified_email
+      }
     ]
 
     logConfiguration = {
@@ -416,6 +389,95 @@ resource "aws_ecs_service" "main" {
   depends_on = [aws_lb_listener.web]
 
   tags = local.common_tags
+}
+
+# ─── ECR ──────────────────────────────────────────────────────────────────────
+
+resource "aws_ecr_repository" "app" {
+  name                 = "${local.name_prefix}-repo"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = local.common_tags
+}
+
+# ─── CloudWatch ───────────────────────────────────────────────────────────────
+
+resource "aws_cloudwatch_log_group" "app" {
+  name              = "/ecs/${local.name_prefix}"
+  retention_in_days = 30
+
+  tags = local.common_tags
+}
+
+# ─── IAM ──────────────────────────────────────────────────────────────────────
+
+# IAM Role for ECS Task Execution
+resource "aws_iam_role" "ecs_task_execution_role" {
+  name = "${local.name_prefix}-ecs-task-execution-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
+  role       = aws_iam_role.ecs_task_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# IAM Role for ECS Task
+resource "aws_iam_role" "ecs_task_role" {
+  name = "${local.name_prefix}-ecs-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+
+  tags = local.common_tags
+}
+
+# IAM Policy for SES (if needed)
+resource "aws_iam_policy" "ses_policy" {
+  count = var.ses_verified_email != "" ? 1 : 0
+  name  = "${local.name_prefix}-ses-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ses:SendEmail",
+          "ses:SendRawEmail"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_role_ses_policy" {
+  count      = var.ses_verified_email != "" ? 1 : 0
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = aws_iam_policy.ses_policy[0].arn
 }
 
 # ─── Auto Scaling ─────────────────────────────────────────────────────────────
