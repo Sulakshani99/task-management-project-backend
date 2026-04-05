@@ -13,7 +13,7 @@ variable "app_name" {
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
-  default     = "dev"
+  default     = "prod"
 }
 
 variable "db_username" {
