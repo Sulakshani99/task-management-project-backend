@@ -6,7 +6,10 @@ target/
 .idea/
 *.iml
 .mvn/
+!.mvn/
 !.mvn/wrapper/
+!.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
 .env
 *.log
 terraform/.terraform/
